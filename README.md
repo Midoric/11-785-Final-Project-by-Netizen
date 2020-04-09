@@ -1,1 +1,1 @@
-This is Team Netizen's code for CMU 11-785 Final Project.  
+This is Team Netizen's code for CMU 11-785 Final Project (Midterm version).  
