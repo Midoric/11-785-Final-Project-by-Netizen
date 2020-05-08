@@ -1,6 +1,4 @@
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
 
 def preprocess(images, n):
     '''
@@ -10,18 +8,19 @@ def preprocess(images, n):
     :return block_height: height of each block
     :return block_width: width of each block
     '''
-    batch_size, channel, height, width = images.size()
-    # check if images can be fully divided into n x n pieces with equal length and width for each puzzle piece
-    assert (n > 0 and height % n == 0 and width % n == 0)
+    batch_size, channel, h, w = images.size()
+    assert (n > 0 and h % n == 0 and w % n == 0)
 
-    block_height, block_width = height // n, width // n
+    # check if images can be fully divided into n x n pieces with equal length and width for each puzzle piece
+
+    bh, bw = h // n, w // n                # height, width of each block
 
     perm_inds = []
-    for r in range(0, height, block_height):
-        for c in range(0, width, block_width):
+    for r in range(0, h, bh):
+        for c in range(0, w, bw):
             perm_inds.append((r, c))
 
-    return perm_inds, block_height, block_width
+    return perm_inds, bh, bw
 
 def permute_nxn(images, n):
     '''
@@ -30,35 +29,41 @@ def permute_nxn(images, n):
     :return permuted_images: (N x C x H x W) permuted images
     :return perms: (N x (n**2)) all permutations
     '''
-    perm_inds, block_height, block_width = preprocess(images, n)
-    batch_size, in_channel, height, width = images.size()
+    perm_inds, bh, bw = preprocess(images, n)
+    batch_size = images.size()[0]
 
-    permuted_images = torch.FloatTensor(images.size()) # Intialized as FloatTensor, dim: (N x C x H x W)
-    perms = torch.LongTensor(batch_size, n * n)    # Initialized as permutation LongTensor, dim: (N, n x n)
+    permuted_images = torch.FloatTensor(images.size())  # Initialized as FloatTensor, dim: (N x C x H x W)
+    perms = torch.LongTensor(batch_size, n * n)         # Initialized as permutation LongTensor, dim: (N, n**2)
 
     for i in range(batch_size):
         order = torch.randperm(n * n)  # jth piece is placed at order[j]th place
         for j in range(n * n):
             sr, sc = perm_inds[j]
             tr, tc = perm_inds[order[j]]
-            permuted_images[i, :, tr:tr + block_height, tc:tc + block_width] = images[i, :, sr:sr + block_height, sc:sc + block_width]
+            permuted_images[i, :, tr:tr + bh, tc:tc + bw] = images[i, :, sr:sr + bh, sc:sc + bw]
         perms[i, :] = order
 
-    return (permuted_images, perms)
+    return permuted_images, perms
 
-# def restore_nxn(p_images, perms, n):
-#     perm_inds, p_height, p_width = preprocess(p_images, n)
-#     batch_size, in_channel, height, width = p_images.size()
-#
-#     images = torch.FloatTensor(p_images.size())
-#
-#     for i in range(batch_size):
-#         for j in range(n * n):
-#             sr, sc = perm_inds[j]
-#             tr, tc = perm_inds[perms[i, j]]
-#             images[i, :, sr:sr + p_height, sc:sc + p_height] = p_images[i, :, tr:tr + p_width, tc:tc + p_width]
-#
-#     return images
+def restore_nxn(p_images, perms, n):
+    '''
+    :params p_images: (N x C x H x W) permuted images
+    :param perms: permutations
+    :param n: int such the image is divided into n x n blocks
+    :return images (N x C x H x W) original images
+    '''
+    perm_inds, bh, bw = preprocess(p_images, n)
+    batch_size = p_images.size()[0]
+
+    images = torch.FloatTensor(p_images.size())
+
+    for i in range(batch_size):
+        for j in range(n * n):
+            sr, sc = perm_inds[j]
+            tr, tc = perm_inds[perms[i, j]]
+            images[i, :, sr:sr + bh, sc:sc + bh] = p_images[i, :, tr:tr + bw, tc:tc + bw]
+
+    return images
 
 def perm2vecmat(perms, n):
     '''
@@ -66,6 +71,7 @@ def perm2vecmat(perms, n):
     :param n: int such the image is divided into n x n blocks
     :return M: (N x (n**4)) all permutation matrices
     '''
+    assert (perms.shape[1] == n ** 2)
 
     batch_size = perms.size()[0]
     M = torch.zeros(batch_size, n * n, n * n)
@@ -82,18 +88,29 @@ def vecmat2perm(M, n):
     :param n: n: int such the image is divided into n x n blocks
     :return perms: (N x (n**2)) all permutations
     '''
+    assert (M.shape[1] == n ** 4)
 
     batch_size = M.size()[0]
     M = M.view(batch_size, n * n, n * n)
     _, perms = M.max(2)
     return perms
 
-def sinkhorn(A, n_iter=4):
-    """
-    Sinkhorn iterations.
-    """
+def sinkhorn(M, n_iter=4):
+    '''
+    :param M: (N x (n*n) x (n*n)) original matrix
+    :param n_iter: number of iterations to be performed
+    :return M: (N x (n*n) x (n*n)) matrix after sinkhorn normalization
+    '''
     for i in range(n_iter):
-        A = A / A.sum(dim=1, keepdim=True)
-        A = A / A.sum(dim=2, keepdim=True)
-    return A
+        M = M / M.sum(dim=1, keepdim=True)
+        M = M / M.sum(dim=2, keepdim=True)
+    return M
+
+def get_lr(optimizer):
+    '''
+    Get learning rate of the optimizer
+    '''
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
+
 

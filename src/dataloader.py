@@ -6,7 +6,9 @@ import numpy as np
 dataset_dir = './data'
 
 transform = transforms.Compose(
-    [transforms.ToTensor()])
+    [transforms.RandomHorizontalFlip(),
+     transforms.RandomVerticalFlip(),
+     transforms.ToTensor()])
 
 def load_data(batch_size, num_workers=0, val_ratio=0.2):
 

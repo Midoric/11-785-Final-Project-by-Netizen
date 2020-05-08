@@ -1,1 +1,1 @@
-This is Team Netizen's code for CMU 11-785 Final Project (Midterm version).  
+**This is Team Netizen's implementation of a jigsaw puzzle solver using neural networks for CMU 11-785 S20 Final Project.** 

@@ -1,21 +1,20 @@
 '''
-CMU 11-785 Final Project (Midterm report version)
+CMU 11-785 Final Project (Final version)
 Team: Netizen
-Partly cited from https://research.wmz.ninja/attachments/articles/2018/03/jigsaw_cifar100.html
+Members: Mingyi Cai, Yi Ren, Daijun Qian, Min Hsuan Hsu
+Credits to https://research.wmz.ninja/attachments/articles/2018/03/jigsaw_cifar100.html
 '''
 
-from dataloader import *
-from model import *
 from train_test import *
+from model import *
+from dataloader import *
 from basic_functions import *
-
+import matplotlib.pyplot as plt
 import torch.optim as optim
 
 torch.manual_seed(11785)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-PATH = 'drive/My Drive/final_project/curves/'
-
-n = 2
+PATH = ''
 
 
 def main():
@@ -31,8 +30,11 @@ def main():
 
     n_epochs = 50
     model = JigsawNet(input_chan=input_chan, height=height, width=width, sinkhorn_iter=sinkhorn_iter).to(DEVICE)
+    model.apply(init_weights)
+
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters())
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.9, patience = 0)
 
     print("Model Architecture:", model)
     n_params = 0
@@ -47,16 +49,18 @@ def main():
     train_acc_history = []
     val_acc_history = []
     for epoch in range(n_epochs):
+        print("Epoch {}: Learning rate = {}".format(epoch + 1, get_lr(optimizer)))
         train_loss, train_acc = train(epoch, train_loader, model, criterion, optimizer)
         train_loss_history.append(train_loss)
         train_acc_history.append(train_acc)
-        val_loss, val_acc = val(epoch, val_loader, model, criterion, optimizer)
+
+        val_loss, val_acc = val(epoch, val_loader, model, criterion)
         val_loss_history.append(val_loss)
         val_acc_history.append(val_acc)
-        # test_acc = test(epoch, test_loader, model, criterion, optimizer)
+
+        scheduler.step(val_loss)
+        # test_acc = test(epoch, test_loader, model)
         # torch.save(model.state_dict(), 'jigsaw_cifar100_e{}_s{}.pt'.format(epoch, sinkhorn_iter))
-
-
 
     plt.figure()
     plt.plot(train_loss_history)
@@ -64,7 +68,7 @@ def main():
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend(['Train', 'Validation'])
-    plt.savefig(path + 'loss')
+    plt.savefig(PATH + 'loss')
 
     plt.figure()
     plt.plot(train_acc_history)
@@ -72,8 +76,7 @@ def main():
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
     plt.legend(['Train', 'Validation'])
-    plt.savefig(path + 'acc')
-
+    plt.savefig(PATH + 'acc')
 
 
 if __name__ == '__main__':
